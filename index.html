@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>แผนที่ความหนาแน่นตึกแถว กรุงเทพมหานคร พ.ศ. 2561</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<style>
+  :root{
+    --ink:#1A1726; --ink-soft:#56516B; --line:#E2DFEC;
+    --panel:#FFFFFF; --bg:#F6F4F0; --accent:#534AB7;
+    --c1:#EEEDFE; --c2:#C9C5F0; --c3:#A59EE6; --c4:#7F77DD; --c5:#5B52C4; --c6:#3C3489; --c7:#26215C;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{font-family:'Sarabun','Segoe UI',system-ui,sans-serif;color:var(--ink);background:var(--bg);overflow:hidden}
+  #app{display:flex;height:100vh;width:100vw}
+  #sidebar{width:330px;flex-shrink:0;background:var(--panel);border-right:1px solid var(--line);
+    padding:26px 24px;overflow-y:auto;display:flex;flex-direction:column;gap:22px}
+  .eyebrow{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);font-weight:700}
+  h1{font-size:21px;line-height:1.3;font-weight:700;margin-top:5px}
+  .sub{font-size:13px;color:var(--ink-soft);line-height:1.55;margin-top:7px}
+  .total{display:flex;align-items:baseline;gap:8px;padding:15px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+  .total .num{font-size:30px;font-weight:800;color:var(--accent);font-variant-numeric:tabular-nums}
+  .total .lbl{font-size:13px;color:var(--ink-soft)}
+  .legend-title{font-size:12px;font-weight:700;letter-spacing:.04em;margin-bottom:9px;color:var(--ink)}
+  .legend-row{display:flex;align-items:center;gap:9px;font-size:12.5px;color:var(--ink-soft);margin-bottom:6px;cursor:default}
+  .swatch{width:24px;height:13px;border-radius:3px;flex-shrink:0}
+  .readout{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:14px;min-height:96px}
+  .readout .rd-name{font-size:16px;font-weight:700}
+  .readout .rd-group{font-size:12px;color:var(--accent);font-weight:600;margin-top:2px}
+  .readout .rd-num{font-size:26px;font-weight:800;font-variant-numeric:tabular-nums;margin-top:8px}
+  .readout .rd-unit{font-size:12px;color:var(--ink-soft);font-weight:400;margin-left:4px}
+  .readout .rd-hint{font-size:12.5px;color:var(--ink-soft);line-height:1.5}
+  .rank{font-size:12px;color:var(--ink-soft);margin-top:6px}
+  .foot{font-size:11px;color:var(--ink-soft);line-height:1.55;margin-top:auto;padding-top:14px;border-top:1px solid var(--line)}
+  #map{flex:1;background:#EAF0F3}
+  .leaflet-container{font-family:inherit}
+  .dlabel{font-size:10px;font-weight:600;color:#2c2640;text-shadow:0 0 3px #fff,0 0 3px #fff,0 0 3px #fff;background:none;border:none;box-shadow:none}
+  .info-pill{position:absolute;top:14px;right:14px;z-index:1000;background:rgba(255,255,255,.94);
+    border:1px solid var(--line);border-radius:9px;padding:9px 13px;font-size:12px;color:var(--ink-soft);max-width:230px;line-height:1.5}
+  @media(max-width:760px){
+    #app{flex-direction:column}
+    #sidebar{width:100%;height:auto;max-height:44vh;border-right:none;border-bottom:1px solid var(--line)}
+    #map{height:56vh}
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <aside id="sidebar">
+    <div>
+      <div class="eyebrow">สำนักงานภูมิสารสนเทศ · สวพ. กทม.</div>
+      <h1>ความหนาแน่นตึกแถว<br>กรุงเทพมหานคร</h1>
+      <p class="sub">จำนวนอาคารประเภทตึกแถวราย 50 เขต จากฐานข้อมูลภูมิสารสนเทศ ปี พ.ศ. 2561</p>
+    </div>
+    <div class="total">
+      <span class="num" id="totalNum">400,461</span>
+      <span class="lbl">อาคาร · 50 เขต</span>
+    </div>
+    <div class="readout" id="readout">
+      <div class="rd-hint">เลื่อนเมาส์หรือแตะที่เขตบนแผนที่<br>เพื่อดูจำนวนตึกแถวรายเขต</div>
+    </div>
+    <div>
+      <div class="legend-title">จำนวนตึกแถว (อาคาร)</div>
+      <div id="legend"></div>
+    </div>
+    <div class="foot">
+      ที่มา: ฐานข้อมูล GIS ตึกแถว สำนักงานภูมิสารสนเทศ สำนักการวางผังและพัฒนาเมือง กรุงเทพมหานคร (พ.ศ. 2561)<br>
+      แผนที่ฐาน © OpenStreetMap contributors
+    </div>
+  </aside>
+  <div id="map">
+    <div class="info-pill" id="pill">กำลังโหลดขอบเขตเขต…</div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// ====== ข้อมูลฝังในไฟล์ (ไม่ต้องใช้ server) ======
+const COUNTS = {"คลองสาน": 14960, "คลองสามวา": 4024, "คลองเตย": 9986, "คันนายาว": 4810, "จตุจักร": 7783, "จอมทอง": 14809, "ดอนเมือง": 4898, "ดินแดง": 15081, "ดุสิต": 5470, "ตลิ่งชัน": 2290, "ทวีวัฒนา": 3120, "ทุ่งครุ": 6587, "ธนบุรี": 22376, "บางกอกน้อย": 6470, "บางกอกใหญ่": 5985, "บางกะปิ": 11966, "บางขุนเทียน": 7796, "บางคอแหลม": 12552, "บางซื่อ": 10757, "บางนา": 4929, "บางบอน": 15112, "บางพลัด": 10144, "บางรัก": 11727, "บางเขน": 5703, "บางแค": 10410, "บึงกุ่ม": 3589, "ปทุมวัน": 7832, "ประเวศ": 6073, "ป้อมปราบศัตรูพ่าย": 13017, "พญาไท": 4832, "พระนคร": 12221, "พระโขนง": 5101, "ภาษีเจริญ": 8677, "มีนบุรี": 4069, "ยานนาวา": 9298, "ราชเทวี": 8984, "ราษฎร์บูรณะ": 6904, "ลาดกระบัง": 6292, "ลาดพร้าว": 5107, "วังทองหลาง": 5258, "วัฒนา": 7980, "สวนหลวง": 7826, "สะพานสูง": 1975, "สัมพันธวงศ์": 9817, "สาทร": 14098, "สายไหม": 4656, "หนองจอก": 1238, "หนองแขม": 4993, "หลักสี่": 4659, "ห้วยขวาง": 6220};
+const D2G = {"พระนคร": "กรุงเทพกลาง", "ป้อมปราบศัตรูพ่าย": "กรุงเทพกลาง", "สัมพันธวงศ์": "กรุงเทพกลาง", "ดุสิต": "กรุงเทพกลาง", "พญาไท": "กรุงเทพกลาง", "ราชเทวี": "กรุงเทพกลาง", "ห้วยขวาง": "กรุงเทพกลาง", "ดินแดง": "กรุงเทพกลาง", "วังทองหลาง": "กรุงเทพกลาง", "ปทุมวัน": "กรุงเทพใต้", "บางรัก": "กรุงเทพใต้", "สาทร": "กรุงเทพใต้", "ยานนาวา": "กรุงเทพใต้", "บางคอแหลม": "กรุงเทพใต้", "คลองเตย": "กรุงเทพใต้", "วัฒนา": "กรุงเทพใต้", "พระโขนง": "กรุงเทพใต้", "สวนหลวง": "กรุงเทพใต้", "บางนา": "กรุงเทพใต้", "จตุจักร": "กรุงเทพเหนือ", "บางซื่อ": "กรุงเทพเหนือ", "หลักสี่": "กรุงเทพเหนือ", "ดอนเมือง": "กรุงเทพเหนือ", "สายไหม": "กรุงเทพเหนือ", "บางเขน": "กรุงเทพเหนือ", "ลาดพร้าว": "กรุงเทพเหนือ", "บางกะปิ": "กรุงเทพตะวันออก", "สะพานสูง": "กรุงเทพตะวันออก", "บึงกุ่ม": "กรุงเทพตะวันออก", "คันนายาว": "กรุงเทพตะวันออก", "คลองสามวา": "กรุงเทพตะวันออก", "หนองจอก": "กรุงเทพตะวันออก", "มีนบุรี": "กรุงเทพตะวันออก", "ลาดกระบัง": "กรุงเทพตะวันออก", "ประเวศ": "กรุงเทพตะวันออก", "ธนบุรี": "กรุงธนเหนือ", "คลองสาน": "กรุงธนเหนือ", "บางกอกน้อย": "กรุงธนเหนือ", "บางกอกใหญ่": "กรุงธนเหนือ", "บางพลัด": "กรุงธนเหนือ", "ตลิ่งชัน": "กรุงธนเหนือ", "ทวีวัฒนา": "กรุงธนเหนือ", "จอมทอง": "กรุงธนเหนือ", "ภาษีเจริญ": "กรุงธนใต้", "หนองแขม": "กรุงธนใต้", "บางแค": "กรุงธนใต้", "บางขุนเทียน": "กรุงธนใต้", "บางบอน": "กรุงธนใต้", "ราษฎร์บูรณะ": "กรุงธนใต้", "ทุ่งครุ": "กรุงธนใต้"};
+
+// ====== ตั้งค่าที่ต้องแก้ให้ตรงกับไฟล์ GeoJSON ของท่าน ======
+// ใส่ชื่อไฟล์ GeoJSON ขอบเขตเขต (วางไว้โฟลเดอร์เดียวกับไฟล์ HTML นี้)
+const GEOJSON_URL = "bangkok-districts.geojson";
+// ใส่ชื่อ property ที่เก็บ "ชื่อเขต" ใน GeoJSON ของท่าน เช่น "dname","DISTRICT_N","name_th"
+// ระบบจะลองหาให้อัตโนมัติจากรายการนี้ แต่แก้ให้ตรงได้เพื่อความแน่นอน
+const NAME_FIELD_CANDIDATES = ["dname","DISTRICT_N","name_th","NAME_TH","amp_th","ADM2_TH","district","name","NAME","AMPHOE_T"];
+// =============================================================
+
+const BREAKS = [2000,4000,6000,9000,13000,18000];
+const RAMP = ['--c1','--c2','--c3','--c4','--c5','--c6','--c7'].map(v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim());
+function colorFor(v){
+  if(v==null) return '#d8d4e2';
+  for(let i=0;i<BREAKS.length;i++){ if(v<BREAKS[i]) return RAMP[i]; }
+  return RAMP[RAMP.length-1];
+}
+function fmt(n){return n.toLocaleString('en-US');}
+function stripPrefix(s){return (s||'').replace(/^เขต/,'').trim();}
+
+// ลำดับจากมากไปน้อย เพื่อแสดงอันดับ
+const RANKED = Object.entries(COUNTS).sort((a,b)=>b[1]-a[1]).map(x=>x[0]);
+
+const map = L.map('map',{zoomControl:true,attributionControl:true}).setView([13.74,100.55],11);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png',{
+  maxZoom:18, attribution:'© OpenStreetMap, © CARTO'
+}).addTo(map);
+
+// legend
+const legend=document.getElementById('legend');
+const ranges=[['< 2,000',RAMP[0]],['2,000–3,999',RAMP[1]],['4,000–5,999',RAMP[2]],['6,000–8,999',RAMP[3]],['9,000–12,999',RAMP[4]],['13,000–17,999',RAMP[5]],['≥ 18,000',RAMP[6]]];
+legend.innerHTML=ranges.map(([t,c])=>`<div class="legend-row"><span class="swatch" style="background:${c}"></span>${t}</div>`).join('');
+
+const readout=document.getElementById('readout');
+function showDistrict(name){
+  const v=COUNTS[name];
+  if(v==null){ readout.innerHTML=`<div class="rd-name">เขต${name}</div><div class="rd-hint" style="margin-top:6px">ไม่พบข้อมูลจำนวนตึกแถวสำหรับเขตนี้ (ตรวจสอบการสะกดชื่อใน GeoJSON)</div>`; return; }
+  const rank=RANKED.indexOf(name)+1;
+  const grp=D2G[name]||'-';
+  readout.innerHTML=`<div class="rd-name">เขต${name}</div><div class="rd-group">${grp}</div>`+
+    `<div class="rd-num">${fmt(v)}<span class="rd-unit">อาคาร</span></div>`+
+    `<div class="rank">อันดับที่ ${rank} จาก 50 เขต</div>`;
+}
+
+let geoLayer=null;
+function styleFn(feat){
+  const nm=feat.__dname;
+  return {fillColor:colorFor(COUNTS[nm]), weight:1, opacity:1, color:'#ffffff', fillOpacity:0.85};
+}
+function onEach(feat,layer){
+  layer.on({
+    mouseover:e=>{const l=e.target;l.setStyle({weight:2.5,color:'#534AB7',fillOpacity:0.95});l.bringToFront();showDistrict(feat.__dname);},
+    mouseout:e=>{geoLayer.resetStyle(e.target);},
+    click:e=>{showDistrict(feat.__dname);map.fitBounds(e.target.getBounds(),{maxZoom:13,padding:[20,20]});}
+  });
+}
+
+function detectField(props){
+  for(const f of NAME_FIELD_CANDIDATES){ if(props && props[f]!=null && String(props[f]).trim()!=='') return f; }
+  // fallback: first string property
+  for(const k in props){ if(typeof props[k]==='string') return k; }
+  return null;
+}
+
+fetch(GEOJSON_URL).then(r=>{
+  if(!r.ok) throw new Error('ไม่พบไฟล์ '+GEOJSON_URL);
+  return r.json();
+}).then(gj=>{
+  const f0=gj.features&&gj.features[0];
+  const field=detectField(f0&&f0.properties);
+  let matched=0;
+  gj.features.forEach(ft=>{
+    const raw = field? ft.properties[field] : '';
+    const nm = stripPrefix(raw);
+    ft.__dname = nm;
+    if(COUNTS[nm]!=null) matched++;
+  });
+  geoLayer=L.geoJSON(gj,{style:styleFn,onEachFeature:onEach}).addTo(map);
+  // labels
+  geoLayer.eachLayer(l=>{
+    const nm=l.feature.__dname;
+    try{ const c=l.getBounds().getCenter();
+      L.marker(c,{interactive:false,icon:L.divIcon({className:'dlabel',html:nm,iconSize:[60,12]})}).addTo(map);
+    }catch(e){}
+  });
+  try{ map.fitBounds(geoLayer.getBounds(),{padding:[10,10]}); }catch(e){}
+  const pill=document.getElementById('pill');
+  pill.innerHTML = `จับคู่ข้อมูลสำเร็จ ${matched}/50 เขต` + (matched<50? `<br><b style="color:#b4453a">โปรดตรวจชื่อ property "${field}" ใน GeoJSON</b>` : '');
+  if(matched===50){ setTimeout(()=>pill.style.display='none',3500); }
+}).catch(err=>{
+  document.getElementById('pill').innerHTML='<b style="color:#b4453a">โหลด GeoJSON ไม่สำเร็จ</b><br>'+err.message+'<br>วางไฟล์ "'+GEOJSON_URL+'" ไว้โฟลเดอร์เดียวกับหน้านี้';
+});
+</script>
+</body>
+</html>
